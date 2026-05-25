@@ -272,16 +272,18 @@ class DeliveryBoyController extends Controller
         return view('backend.delivery_boys.cancel_request_list', compact('cancel_requests'));
     } // ?? هذا هو قوس الإغلاق المفقود والساحر الذي يجب إضافته هنا فوراً لإصلاح الكسر والهيكل
 
-        public function assigned_delivery_custom(Request $request)
+           public function assigned_delivery_custom(Request $request)
     {
         $user_id = Auth::user()->id;
         $delivery_boy = DeliveryBoy::where('user_id', $user_id)->first();
         $delivery_boy_id = $delivery_boy ? $delivery_boy->id : 0;
 
-        // ?? الاستعلام القياسي الصافي الموجه للحقل الحقيقي الوحيد في جدولك 'assign_delivery_boy' لقفل الأزمة نهائياً
+        // 🎯 الفلترة الذهبية الشاملة: فحص الحقل المالي لطلب البائع والحقل القياسي لطلب الأدمن معاً لفك الحظر فوراً
         $assigned_deliveries = Order::whereIn('delivery_status', ['assigned', 'confirmed', 'pending', 'picked_up', 'on_the_way'])
             ->where(function($query) use ($delivery_boy_id, $user_id) {
-                $query->where('assign_delivery_boy', $delivery_boy_id)
+                $query->where('delivery_boy_id', $delivery_boy_id)
+                      ->orWhere('delivery_boy_id', $user_id)
+                      ->orWhere('assign_delivery_boy', $delivery_boy_id)
                       ->orWhere('assign_delivery_boy', $user_id);
             })
             ->orderBy('created_at', 'desc')
