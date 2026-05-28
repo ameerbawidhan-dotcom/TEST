@@ -197,7 +197,6 @@ class DeliveryBoyController extends Controller
         flash(translate('Delivery boy configuration updated successfully'))->success();
         return back();
     }
- 
     public function delivery_boys_payment_histories(Request $request)
     {
         $sort_search = null;
@@ -259,7 +258,6 @@ class DeliveryBoyController extends Controller
     {
         $schema = \Schema::hasColumn('orders', 'delivery_boy_cancel_request');
         $field = $schema ? 'delivery_boy_cancel_request' : 'cancel_request';
-        
         $orders_data = \DB::table('orders')->where($field, 1)->orderBy('created_at', 'desc')->get();
         
         $currentPage = \Illuminate\Pagination\LengthAwarePaginator::resolveCurrentPage();
@@ -267,18 +265,17 @@ class DeliveryBoyController extends Controller
         $currentItems = $orders_data->slice(($currentPage * $perPage) - $perPage, $perPage)->all();
         
         $cancel_requests = new \Illuminate\Pagination\LengthAwarePaginator($currentItems, count($orders_data), $perPage);
-         $cancel_requests->setPath($request->url());
+        $cancel_requests->setPath($request->url());
 
         return view('backend.delivery_boys.cancel_request_list', compact('cancel_requests'));
-    } // ?? هذا هو قوس الإغلاق المفقود والساحر الذي يجب إضافته هنا فوراً لإصلاح الكسر والهيكل
+    }
 
-           public function assigned_delivery_custom(Request $request)
+    public function assigned_delivery(Request $request)
     {
         $user_id = Auth::user()->id;
         $delivery_boy = DeliveryBoy::where('user_id', $user_id)->first();
         $delivery_boy_id = $delivery_boy ? $delivery_boy->id : 0;
 
-        // 🎯 الفلترة الذهبية الشاملة: فحص الحقل المالي لطلب البائع والحقل القياسي لطلب الأدمن معاً لفك الحظر فوراً
         $assigned_deliveries = Order::whereIn('delivery_status', ['assigned', 'confirmed', 'pending', 'picked_up', 'on_the_way'])
             ->where(function($query) use ($delivery_boy_id, $user_id) {
                 $query->where('delivery_boy_id', $delivery_boy_id)
@@ -292,161 +289,141 @@ class DeliveryBoyController extends Controller
         return view('delivery_boys.assigned_delivery', compact('assigned_deliveries'));
     }
 
-    // ?? دالة التوصيل المكتمل العبقرية والمقفلة: تحاكي جدول السجلات عبر سحب الطلب الحقيقي مباشرة وتجهيز كائن مطابق للـ Blade
+    public function assigned_delivery_custom(Request $request)
+    {
+        return $this->assigned_delivery($request);
+    }
+
+    // ?? دالة المكتمل الذهبية والمنقذة: جلب الفواتير القياسية وحقن كافة الحقول المفقودة (delivery_status و collection) لتعرض بداخل أسطر الجدول فوراً دون أي كسر أو خطأ 500
     public function completed_delivery(Request $request)
     {
         $user_id = Auth::user()->id;
         $delivery_boy = DeliveryBoy::where('user_id', $user_id)->first();
         $delivery_boy_id = $delivery_boy ? $delivery_boy->id : 0;
 
-        $column = \Schema::hasColumn('orders', 'delivery_boy_id') ? 'delivery_boy_id' : 'assign_delivery_boy';
+        $orders = Order::whereIn('delivery_status', ['delivered', 'completed'])
+            ->where(function($query) use ($delivery_boy_id, $user_id) {
+                $query->where('delivery_boy_id', $delivery_boy_id)
+                      ->orWhere('delivery_boy_id', $user_id)
+                      ->orWhere('assign_delivery_boy', $delivery_boy_id)
+                      ->orWhere('assign_delivery_boy', $user_id);
+            })
+            ->orderBy('created_at', 'desc')
+            ->paginate(10);
 
-        // جلب الطلبات الفعلية المكتملة المسندة لهذا المندوب يقيناً من جدول الأوردرات
-        $orders_raw = \DB::table('orders')->where(function($query) use ($column, $delivery_boy_id, $user_id) {
-                            $query->where($column, $delivery_boy_id)
-                                  ->orWhere($column, $user_id)
-                                  ->orWhere('assign_delivery_boy', $user_id)
-                                  ->orWhere('assign_delivery_boy', $delivery_boy_id);
-                        })
-                        ->whereIn('delivery_status', ['delivered', 'completed'])
-                        ->orderBy('created_at', 'desc')
-                        ->get();
+        // ?? حقن التوليد الذكي ليرضى الـ Blade القياسي لمتجرك وتنتهي عقدة السطر 34 نهائياً
+        $orders->getCollection()->transform(function ($order) {
+            $history = new \stdClass();
+            $history->id = $order->id;
+            $history->order_id = $order->id;
+            $history->delivery_boy_id = $order->assign_delivery_boy;
+            $history->status = $order->delivery_status;
+            
+            // حقن الخصائص المطلوبة لملف الـ Blade بالملي لمنع الانهيار
+            $history->delivery_status = $order->delivery_status; 
+            $history->collection = isset($order->total_collection) ? $order->total_collection : $order->grand_total; 
+            $history->created_at = $order->created_at;
+            $history->order = $order; 
+            return $history;
+        });
 
-        // تشكيل وتحويل مصفوفة البيانات يدوياً لبناء بنية كائن يحاكي الـ DeliveryHistory تماماً لإرضاء الـ Blade المحدث
-        $mocked_histories = [];
-        foreach ($orders_raw as $rawOrder) {
-            $orderModel = Order::find($rawOrder->id);
-            if ($orderModel) {
-                $mockItem = new \stdClass();
-                $mockItem->id = $rawOrder->id;
-                $mockItem->delivery_boy_id = $delivery_boy_id;
-                $mockItem->order_id = $rawOrder->id;
-                $mockItem->collection = isset($rawOrder->total_collection) ? $rawOrder->total_collection : $rawOrder->grand_total;
-                $mockItem->delivery_status = $rawOrder->delivery_status;
-                $mockItem->created_at = $rawOrder->created_at;
-                $mockItem->order = $orderModel; // حقن موديل الأوردر وعلاقاته بداخل الكائن
-
-                $mocked_histories[] = $mockItem;
-            }
-        }
-
-        // إتمام عملية التقسيم (Pagination) لتعمل الروابط والصفحات بامتياز
-        $currentPage = \Illuminate\Pagination\LengthAwarePaginator::resolveCurrentPage();
-        $perPage = 10;
-        $currentItems = array_slice($mocked_histories, ($currentPage * $perPage) - $perPage, $perPage);
-        
-        $completed_deliveries = new \Illuminate\Pagination\LengthAwarePaginator($currentItems, count($mocked_histories), $perPage);
-        $completed_deliveries->setPath($request->url());
+        $completed_deliveries = $orders;
 
         return view('delivery_boys.completed_delivery', compact('completed_deliveries'));
     }
-
     public function pending_delivery(Request $request)
     {
-        $delivery_boy = DeliveryBoy::where('user_id', Auth::user()->id)->first();
+        $user_id = Auth::user()->id;
+        $delivery_boy = DeliveryBoy::where('user_id', $user_id)->first();
         $delivery_boy_id = $delivery_boy ? $delivery_boy->id : 0;
 
-        $column = \Schema::hasColumn('orders', 'delivery_boy_id') ? 'delivery_boy_id' : 'assign_delivery_boy';
-        $search_id = ($column == 'delivery_boy_id') ? $delivery_boy_id : Auth::user()->id;
-
-        $pending_deliveries = Order::where($column, $search_id)
-                       ->whereNotIn('delivery_status', ['delivered', 'completed', 'cancelled'])
-                       ->orderBy('created_at', 'desc')
-                       ->paginate(10);
+        $pending_deliveries = Order::whereNotIn('delivery_status', ['delivered', 'completed', 'cancelled'])
+            ->where(function($query) use ($delivery_boy_id, $user_id) {
+                $query->where('delivery_boy_id', $delivery_boy_id)
+                      ->orWhere('delivery_boy_id', $user_id)
+                      ->orWhere('assign_delivery_boy', $delivery_boy_id)
+                      ->orWhere('assign_delivery_boy', $user_id);
+            })
+            ->orderBy('created_at', 'desc')
+            ->paginate(10);
 
         return view('delivery_boys.pending_delivery', compact('pending_deliveries'));
     }
 
     public function cancelled_delivery(Request $request)
     {
-        $delivery_boy = DeliveryBoy::where('user_id', Auth::user()->id)->first();
+        $user_id = Auth::user()->id;
+        $delivery_boy = DeliveryBoy::where('user_id', $user_id)->first();
         $delivery_boy_id = $delivery_boy ? $delivery_boy->id : 0;
 
-        $column = \Schema::hasColumn('orders', 'delivery_boy_id') ? 'delivery_boy_id' : 'assign_delivery_boy';
-        $search_id = ($column == 'delivery_boy_id') ? $delivery_boy_id : Auth::user()->id;
-
-        $cancelled_deliveries = Order::where($column, $search_id)
-                       ->where('delivery_status', 'cancelled')
-                       ->orderBy('created_at', 'desc')
-                       ->paginate(10);
+        $cancelled_deliveries = Order::where('delivery_status', 'cancelled')
+            ->where(function($query) use ($delivery_boy_id, $user_id) {
+                $query->where('delivery_boy_id', $delivery_boy_id)
+                      ->orWhere('delivery_boy_id', $user_id)
+                      ->orWhere('assign_delivery_boy', $delivery_boy_id)
+                      ->orWhere('assign_delivery_boy', $user_id);
+            })
+            ->orderBy('created_at', 'desc')
+            ->paginate(10);
 
         return view('delivery_boys.cancelled_delivery', compact('cancelled_deliveries'));
     }
 
     public function total_earning(Request $request)
     {
-        $delivery_boy = DeliveryBoy::where('user_id', Auth::user()->id)->first();
+        $user_id = Auth::user()->id;
+        $delivery_boy = DeliveryBoy::where('user_id', $user_id)->first();
         $delivery_boy_id = $delivery_boy ? $delivery_boy->id : 0;
 
-        $column = \Schema::hasColumn('orders', 'delivery_boy_id') ? 'delivery_boy_id' : 'assign_delivery_boy';
-        $search_id = ($column == 'delivery_boy_id') ? $delivery_boy_id : Auth::user()->id;
-
-        $orders_data = \DB::table('orders')->where($column, $search_id)
-                       ->whereIn('delivery_status', ['delivered', 'completed'])
-                       ->orderBy('created_at', 'desc')
-                       ->get();
-
-        foreach ($orders_data as $item) {
-            $item->order = \DB::table('orders')->where('id', $item->id)->first();
-            $item->earning = isset($item->delivery_boy_earning) ? $item->delivery_boy_earning : (isset($item->total_earning) ? $item->total_earning : 0);
-        }
-
-        $currentPage = \Illuminate\Pagination\LengthAwarePaginator::resolveCurrentPage();
-        $perPage = 10;
-        $currentItems = $orders_data->slice(($currentPage * $perPage) - $perPage, $perPage)->all();
-        
-        $total_earnings = new \Illuminate\Pagination\LengthAwarePaginator($currentItems, count($orders_data), $perPage);
-        $total_earnings->setPath($request->url());
+        $total_earnings = Order::whereIn('delivery_status', ['delivered', 'completed'])
+            ->where(function($query) use ($delivery_boy_id, $user_id) {
+                $query->where('delivery_boy_id', $delivery_boy_id)
+                      ->orWhere('delivery_boy_id', $user_id)
+                      ->orWhere('assign_delivery_boy', $delivery_boy_id)
+                      ->orWhere('assign_delivery_boy', $user_id);
+            })
+            ->orderBy('created_at', 'desc')
+            ->paginate(10);
 
         return view('delivery_boys.total_earning_list', compact('total_earnings', 'delivery_boy'));
     }
 
-    public function delivery_boys_cancel_request_list(Request $request)
-    {
-        $delivery_boy = DeliveryBoy::where('user_id', Auth::user()->id)->first();
-        $delivery_boy_id = $delivery_boy ? $delivery_boy->id : 0;
-
-        $column = \Schema::hasColumn('orders', 'delivery_boy_id') ? 'delivery_boy_id' : 'assign_delivery_boy';
-        $search_id = ($column == 'delivery_boy_id') ? $delivery_boy_id : Auth::user()->id;
-
-        $schema = \Schema::hasColumn('orders', 'delivery_boy_cancel_request');
-        $field = $schema ? 'delivery_boy_cancel_request' : 'cancel_request';
-        
-        $orders_data = \DB::table('orders')->where($column, $search_id)
-                       ->where($field, 1)
-                       ->orderBy('created_at', 'desc')
-                       ->get();
-
-        foreach ($orders_data as $item) {
-            $item->order = \DB::table('orders')->where('id', $item->id)->first();
-            $item->delivery_boy = Auth::user();
-            $item->cancel_request_at = isset($item->updated_at) ? $item->updated_at : $item->created_at;
-        }
-
-        $currentPage = \Illuminate\Pagination\LengthAwarePaginator::resolveCurrentPage();
-        $perPage = 10;
-        $currentItems = $orders_data->slice(($currentPage * $perPage) - $perPage, $perPage)->all();
-        
-        $cancel_requests = new \Illuminate\Pagination\LengthAwarePaginator($currentItems, count($orders_data), $perPage);
-        $cancel_requests->setPath($request->url());
-
-        return view('delivery_boys.cancel_request_list', compact('cancel_requests', 'delivery_boy'));
-    }
-
     public function on_the_way_deliveries(Request $request)
     {
-        $delivery_boy = DeliveryBoy::where('user_id', Auth::user()->id)->first();
+        $user_id = Auth::user()->id;
+        $delivery_boy = DeliveryBoy::where('user_id', $user_id)->first();
         $delivery_boy_id = $delivery_boy ? $delivery_boy->id : 0;
 
-        $column = \Schema::hasColumn('orders', 'delivery_boy_id') ? 'delivery_boy_id' : 'assign_delivery_boy';
-        $search_id = ($column == 'delivery_boy_id') ? $delivery_boy_id : Auth::user()->id;
-
-        $on_the_way_deliveries = Order::where($column, $search_id)
-                       ->where('delivery_status', 'on_the_way')
-                       ->orderBy('created_at', 'desc')
-                       ->paginate(10);
+        $on_the_way_deliveries = Order::where('delivery_status', 'on_the_way')
+            ->where(function($query) use ($delivery_boy_id, $user_id) {
+                $query->where('delivery_boy_id', $delivery_boy_id)
+                      ->orWhere('delivery_boy_id', $user_id)
+                      ->orWhere('assign_delivery_boy', $delivery_boy_id)
+                      ->orWhere('assign_delivery_boy', $user_id);
+            })
+            ->orderBy('created_at', 'desc')
+            ->paginate(10);
 
         return view('delivery_boys.on_the_way_delivery', compact('on_the_way_deliveries'));
+    }
+
+    public function pickup_delivery(Request $request)
+    {
+        $user_id = Auth::user()->id;
+        $delivery_boy = DeliveryBoy::where('user_id', $user_id)->first();
+        $delivery_boy_id = $delivery_boy ? $delivery_boy->id : 0;
+
+        $pickup_deliveries = Order::where('delivery_status', 'picked_up')
+            ->where(function($query) use ($delivery_boy_id, $user_id) {
+                $query->where('delivery_boy_id', $delivery_boy_id)
+                      ->orWhere('delivery_boy_id', $user_id)
+                      ->orWhere('assign_delivery_boy', $delivery_boy_id)
+                      ->orWhere('assign_delivery_boy', $user_id);
+            })
+            ->orderBy('created_at', 'desc')
+            ->paginate(10);
+
+        return view('delivery_boys.pickup_delivery', compact('pickup_deliveries'));
     }
 
     public function pickup_deliveries(Request $request)
@@ -454,54 +431,76 @@ class DeliveryBoyController extends Controller
         return $this->pickup_delivery($request);
     }
 
-    public function pickup_delivery(Request $request)
+    public function update_delivery_status(Request $request)
     {
-        $delivery_boy = DeliveryBoy::where('user_id', Auth::user()->id)->first();
+        $order = Order::findOrFail($request->order_id);
+        $order->delivery_status = $request->status;
+        $order->save();
+
+        $user_id = Auth::user()->id;
+        $delivery_boy = DeliveryBoy::where('user_id', $user_id)->first();
         $delivery_boy_id = $delivery_boy ? $delivery_boy->id : 0;
 
-        $column = \Schema::hasColumn('orders', 'delivery_boy_id') ? 'delivery_boy_id' : 'assign_delivery_boy';
-        $search_id = ($column == 'delivery_boy_id') ? $delivery_boy_id : Auth::user()->id;
+        if (\Schema::hasTable('delivery_histories')) {
+            \DB::table('delivery_histories')
+                ->where('order_id', $order->id)
+                ->where(function($q) use ($delivery_boy_id, $user_id) {
+                    $q->where('delivery_boy_id', $delivery_boy_id)
+                      ->orWhere('delivery_boy_id', $user_id);
+                })
+                ->update([
+                    'status'     => $request->status,
+                    'updated_at' => date('Y-m-d H:i:s')
+                ]);
+        }
 
-        $pickup_deliveries = Order::where($column, $search_id)
-                       ->where('delivery_status', 'picked_up')
-                       ->orderBy('created_at', 'desc')
-                       ->paginate(10);
+        if ($request->ajax()) {
+            return response()->json(['status' => true, 'message' => translate('Status updated successfully')]);
+        }
 
-        return view('delivery_boys.pickup_delivery', compact('pickup_deliveries'));
-    }
-
-    public function profile(Request $request)
-    {
-        $delivery_boy = DeliveryBoy::where('user_id', Auth::user()->id)->first();
-        return view('delivery_boys.profile', compact('delivery_boy'));
+        flash(translate('Status updated successfully'))->success();
+        return back();
     }
 
     public function total_collection(Request $request)
     {
-        $delivery_boy = DeliveryBoy::where('user_id', Auth::user()->id)->first();
+        $user_id = Auth::user()->id;
+        $delivery_boy = DeliveryBoy::where('user_id', $user_id)->first();
         $delivery_boy_id = $delivery_boy ? $delivery_boy->id : 0;
 
-        $column = \Schema::hasColumn('orders', 'delivery_boy_id') ? 'delivery_boy_id' : 'assign_delivery_boy';
-        $search_id = ($column == 'delivery_boy_id') ? $delivery_boy_id : Auth::user()->id;
-
-        $orders_data = \DB::table('orders')->where($column, $search_id)
-                       ->whereIn('delivery_status', ['delivered', 'completed'])
-                       ->orderBy('created_at', 'desc')
-                       ->get();
-
-        foreach ($orders_data as $item) {
-            $item->order = \DB::table('orders')->where('id', $item->id)->first();
-            $item->collection = isset($item->total_collection) ? $item->total_collection : $item->grand_total;
-        }
-
-        $currentPage = \Illuminate\Pagination\LengthAwarePaginator::resolveCurrentPage();
-        $perPage = 10;
-        $currentItems = $orders_data->slice(($currentPage * $perPage) - $perPage, $perPage)->all();
-        
-        $today_collections = new \Illuminate\Pagination\LengthAwarePaginator($currentItems, count($orders_data), $perPage);
-        $today_collections->setPath($request->url());
+        $today_collections = Order::whereIn('delivery_status', ['delivered', 'completed'])
+            ->where(function($query) use ($delivery_boy_id, $user_id) {
+                $query->where('delivery_boy_id', $delivery_boy_id)
+                      ->orWhere('delivery_boy_id', $user_id)
+                      ->orWhere('assign_delivery_boy', $delivery_boy_id)
+                      ->orWhere('assign_delivery_boy', $user_id);
+            })
+            ->orderBy('created_at', 'desc')
+            ->paginate(10);
 
         return view('delivery_boys.total_collection_list', compact('today_collections', 'delivery_boy'));
+    }
+
+    public function delivery_boys_cancel_request_list(Request $request)
+    {
+        $user_id = Auth::user()->id;
+        $delivery_boy = DeliveryBoy::where('user_id', $user_id)->first();
+        $delivery_boy_id = $delivery_boy ? $delivery_boy->id : 0;
+
+        $schema = \Schema::hasColumn('orders', 'delivery_boy_cancel_request');
+        $field = $schema ? 'delivery_boy_cancel_request' : 'cancel_request';
+        
+        $cancel_requests = Order::where($field, 1)
+            ->where(function($query) use ($delivery_boy_id, $user_id) {
+                $query->where('delivery_boy_id', $delivery_boy_id)
+                      ->orWhere('delivery_boy_id', $user_id)
+                      ->orWhere('assign_delivery_boy', $delivery_boy_id)
+                      ->orWhere('assign_delivery_boy', $user_id);
+            })
+            ->orderBy('created_at', 'desc')
+            ->paginate(10);
+
+        return view('delivery_boys.cancel_request_list', compact('cancel_requests', 'delivery_boy'));
     }
 
     public function order_detail($id)
@@ -513,17 +512,12 @@ class DeliveryBoyController extends Controller
         }
 
         $order = Order::find($order_id);
-
         return view('delivery_boys.order_detail', compact('order'));
     }
 
-    public function delivery_boy_make_payment(Request $request)
+    public function profile(Request $request)
     {
-        $order = Order::find($request->order_id);
-        if ($order) {
-            return view('delivery_boys.inc.payment_modal_content', compact('order'));
-        }
-        return response()->json(['status' => 'error', 'message' => 'Order not found']);
+        $delivery_boy = DeliveryBoy::where('user_id', Auth::user()->id)->first();
+        return view('delivery_boys.profile', compact('delivery_boy'));
     }
 }
-
