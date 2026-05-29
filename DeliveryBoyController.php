@@ -520,4 +520,57 @@ class DeliveryBoyController extends Controller
         $delivery_boy = DeliveryBoy::where('user_id', Auth::user()->id)->first();
         return view('delivery_boys.profile', compact('delivery_boy'));
     }
+
+   public function cancel_request($order_id) {
+        $order = Order::findOrFail($order_id);
+        $order->cancel_request = '1';
+        $order->cancel_request_at = date("Y-m-d H:i:s");
+        $order->save();
+        
+        return back();
+    }
+    
+ /**
+     * For only delivery boy while changing delivery status. 
+     * Call from order controller
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function store_delivery_history($order) {
+        $delivery_history = new DeliveryHistory;
+        
+        $delivery_history->order_id         = $order->id;
+        $delivery_history->delivery_boy_id  = Auth::user()->id;
+        $delivery_history->delivery_status  = $order->delivery_status;
+        $delivery_history->payment_type     = $order->payment_type;
+        if($order->delivery_status == 'delivered') {
+            $delivery_boy = DeliveryBoy::where('user_id', Auth::user()->id)->first();
+            
+            if(get_setting('delivery_boy_payment_type') == 'commission') {
+                $delivery_history->earning      = get_setting('delivery_boy_commission');
+                $delivery_boy->total_earning   += get_setting('delivery_boy_commission');
+            }
+            if($order->payment_type == 'cash_on_delivery') {
+                $delivery_history->collection    = $order->grand_total;
+                $delivery_boy->total_collection += $order->grand_total;
+                
+                $order->payment_status           = 'paid';
+                if($order->commission_calculated == 0) {
+                    calculateCommissionAffilationClubPoint($order);
+                    $order->commission_calculated = 1;
+                }
+                
+            }
+            
+            $delivery_boy->save();
+            
+        }
+        $order->delivery_history_date = date("Y-m-d H:i:s");
+        
+        $order->save();
+        $delivery_history->save();
+        
+    }
+
 }
