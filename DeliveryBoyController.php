@@ -9,9 +9,12 @@ use App\Models\Country;
 use App\Models\State;
 use App\Models\City;
 use App\Models\DeliveryBoy;
+use App\Models\DeliveryHistory;
+use App\Models\DeliveryBoyCollection;
 use App\Models\User;
 use App\Models\DeliveryBoyPayment;
 use App\Models\Order;
+
 
 class DeliveryBoyController extends Controller
 {
