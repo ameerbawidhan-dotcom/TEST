@@ -150,6 +150,17 @@ class DeliveryBoyController extends Controller
         flash(translate('Delivery Boy has been updated successfully'))->success();
         return back();
     }
+
+        /**
+     * Remove the specified resource from storage.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function destroy($id)
+    {
+        //
+    }
     
     public function ban($id) {
         $delivery_boy = User::findOrFail($id);
