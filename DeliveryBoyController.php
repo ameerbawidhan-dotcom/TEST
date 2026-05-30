@@ -518,23 +518,14 @@ class DeliveryBoyController extends Controller
         return back();
     }
 
-    public function total_collection(Request $request)
+   public function total_collection()
     {
-        $user_id = Auth::user()->id;
-        $delivery_boy = DeliveryBoy::where('user_id', $user_id)->first();
-        $delivery_boy_id = $delivery_boy ? $delivery_boy->id : 0;
-
-        $today_collections = Order::whereIn('delivery_status', ['delivered', 'completed'])
-            ->where(function($query) use ($delivery_boy_id, $user_id) {
-                $query->where('delivery_boy_id', $delivery_boy_id)
-                      ->orWhere('delivery_boy_id', $user_id)
-                      ->orWhere('assign_delivery_boy', $delivery_boy_id)
-                      ->orWhere('assign_delivery_boy', $user_id);
-            })
-            ->orderBy('created_at', 'desc')
-            ->paginate(10);
-
-        return view('delivery_boys.total_collection_list', compact('today_collections', 'delivery_boy'));
+        $today_collections = DeliveryHistory::where('delivery_boy_id', Auth::user()->id)
+                ->where('delivery_status', 'delivered')
+                ->where('payment_type', 'cash_on_delivery')
+                ->paginate(10);
+        
+        return view('delivery_boys.total_collection_list', compact('today_collections'));
     }
 
     public function delivery_boys_cancel_request_list(Request $request)
