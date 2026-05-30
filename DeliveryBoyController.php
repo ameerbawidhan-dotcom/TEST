@@ -225,6 +225,32 @@ class DeliveryBoyController extends Controller
         flash(translate('Delivery boy configuration updated successfully'))->success();
         return back();
     }
+
+  public function paid_to_delivery_boy(Request $request) {
+        $delivery_boy = DeliveryBoy::where('user_id', $request->delivery_boy_id)->first();
+        
+        if($request->paid_amount > $delivery_boy->total_earning){
+            flash(translate('Paid Amount Can Not Be Larger Than Payable Amount'))->error();
+            return redirect()->route('delivery-boys.index');
+        }
+
+        $delivery_boy->total_earning -= $request->paid_amount;
+        
+        if($delivery_boy->save()){
+            $delivery_boy_payment          = new DeliveryBoyPayment;
+            $delivery_boy_payment->user_id = $request->delivery_boy_id;
+            $delivery_boy_payment->payment = $request->paid_amount;
+
+            $delivery_boy_payment->save();
+
+            flash(translate('Pay To Delivery Boy Successfully'))->success();
+        } else {
+            flash(translate('Something went wrong'))->error();
+        }
+        
+        return redirect()->route('delivery-boys.index');
+    }
+    
     public function delivery_boys_payment_histories(Request $request)
     {
         $sort_search = null;
