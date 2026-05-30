@@ -19,14 +19,17 @@ use App\Models\Order;
 class DeliveryBoyController extends Controller
 {
     public function __construct() {
+        // Staff Permission Check
         $this->middleware(['permission:view_all_delivery_boy'])->only('index');
         $this->middleware(['permission:add_delivery_boy'])->only('create');
         $this->middleware(['permission:edit_delivery_boy'])->only('edit');
         $this->middleware(['permission:ban_delivery_boy'])->only('ban');
         $this->middleware(['permission:collect_from_delivery_boy'])->only('order_collection_form');
+        $this->middleware(['permission:pay_to_delivery_boy'])->only('delivery_earning_form');
         $this->middleware(['permission:delivery_boy_payment_history'])->only('delivery_boys_payment_histories');
         $this->middleware(['permission:collected_histories_from_delivery_boy'])->only('delivery_boys_collection_histories');
         $this->middleware(['permission:order_cancle_request_by_delivery_boy'])->only('cancel_request_list');
+         $this->middleware(['permission:delivery_boy_configuration'])->only('delivery_boy_configure');
     }
 
     public function index(Request $request)
