@@ -94,6 +94,17 @@ class DeliveryBoyController extends Controller
         return redirect()->route('delivery-boys.index');
     }
 
+ /**
+     * Display the specified resource.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function show($id)
+    {
+        //
+    }
+    
     public function edit($id)
     {
         $countries = Country::where('status', 1)->get();
