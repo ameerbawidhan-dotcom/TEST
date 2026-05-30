@@ -425,21 +425,6 @@ class DeliveryBoyController extends Controller
         return view('delivery_boys.cancelled_delivery', compact('cancelled_deliveries'));
     }
 
-      /**
-     * Show the list of total collection by the delivery boy.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
-    public function total_collection()
-    {
-        $today_collections = DeliveryHistory::where('delivery_boy_id', Auth::user()->id)
-                ->where('delivery_status', 'delivered')
-                ->where('payment_type', 'cash_on_delivery')
-                ->paginate(10);
-        
-        return view('delivery_boys.total_collection_list', compact('today_collections'));
-    }
     
     /**
      * Show the list of total earning by the delivery boy.
