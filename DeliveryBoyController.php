@@ -448,23 +448,13 @@ class DeliveryBoyController extends Controller
      * @return \Illuminate\Http\Response
      */
 
-    public function total_earning(Request $request)
+    public function total_earning()
     {
-        $user_id = Auth::user()->id;
-        $delivery_boy = DeliveryBoy::where('user_id', $user_id)->first();
-        $delivery_boy_id = $delivery_boy ? $delivery_boy->id : 0;
-
-        $total_earnings = Order::whereIn('delivery_status', ['delivered', 'completed'])
-            ->where(function($query) use ($delivery_boy_id, $user_id) {
-                $query->where('delivery_boy_id', $delivery_boy_id)
-                      ->orWhere('delivery_boy_id', $user_id)
-                      ->orWhere('assign_delivery_boy', $delivery_boy_id)
-                      ->orWhere('assign_delivery_boy', $user_id);
-            })
-            ->orderBy('created_at', 'desc')
-            ->paginate(10);
-
-        return view('delivery_boys.total_earning_list', compact('total_earnings', 'delivery_boy'));
+        $total_earnings = DeliveryHistory::where('delivery_boy_id', Auth::user()->id)
+                ->where('delivery_status', 'delivered')
+                ->paginate(10);
+        
+        return view('delivery_boys.total_earning_list', compact('total_earnings'));
     }
 
     public function on_the_way_deliveries(Request $request)
