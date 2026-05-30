@@ -177,27 +177,29 @@ class DeliveryBoyController extends Controller
         return back();
     }
     
-    public function order_collection_form(Request $request) {
-        $delivery_boy_info = DeliveryBoy::with('user')
-                ->where('user_id', $request->id)
-                ->first();
-        
-        return view('backend.delivery_boys.order_collection_form', compact('delivery_boy_info'));
-    }
-    
-    public function collection_from_delivery_boy(Request $request) {
+  public function collection_from_delivery_boy(Request $request) {
         $delivery_boy = DeliveryBoy::where('user_id', $request->delivery_boy_id)->first();
         
-        if($request->payout_amount > $delivery_boy->total_collection){
-            flash(translate('Payout amount cannot be greater than total collection'))->error();
-            return back();
+		if($request->payout_amount > $delivery_boy->total_collection){
+            flash(translate('Collection Amount Can Not Be Larger Than Collected Amount'))->error();
+            return redirect()->route('delivery-boys.index');
+        }
+		
+        $delivery_boy->total_collection -= $request->payout_amount;
+        
+        if($delivery_boy->save()){
+            $delivery_boy_collection          = new DeliveryBoyCollection;
+            $delivery_boy_collection->user_id = $request->delivery_boy_id;
+            $delivery_boy_collection->collection_amount = $request->payout_amount;
+
+            $delivery_boy_collection->save();
+
+            flash(translate('Collection From Delivery Boy Successfully'))->success();
+        } else {
+            flash(translate('Something went wrong'))->error();
         }
         
-        $delivery_boy->total_collection -= $request->payout_amount;
-        $delivery_boy->save();
-        
-        flash(translate('Amount collected successfully'))->success();
-        return back();
+        return redirect()->route('delivery-boys.index');
     }
 
     public function delivery_boy_configure()
