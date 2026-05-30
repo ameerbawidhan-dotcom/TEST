@@ -324,6 +324,23 @@ class DeliveryBoyController extends Controller
         return view('backend.delivery_boys.cancel_request_list', compact('cancel_requests'));
     }
 
+       /**
+     * Configuration of delivery boy.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function delivery_boy_configure()
+    {
+        return view('backend.delivery_boys.delivery_boy_configure');
+    }
+    
+    public function order_detail($id)
+    {
+        $order = Order::findOrFail(decrypt($id));
+        return view('delivery_boys.order_detail', compact('order'));
+    }
+    
     public function assigned_delivery(Request $request)
     {
         $user_id = Auth::user()->id;
