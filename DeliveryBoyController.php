@@ -620,7 +620,33 @@ class DeliveryBoyController extends Controller
         
     }
 
-    
+   
+   /**
+     * Collection form from Delivery boy.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function order_collection_form(Request $request) {
+        $delivery_boy_info = DeliveryBoy::with('user')
+                ->where('user_id', $request->id)
+                ->first();
+        
+        return view('backend.delivery_boys.order_collection_form', compact('delivery_boy_info'));
+    }
+
+   /**
+     * Paid form for Delivery boy.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function delivery_earning_form(Request $request) {
+        $delivery_boy_info = DeliveryBoy::with('user')
+                ->where('user_id', $request->id)
+                ->first();
+        
+        return view('backend.delivery_boys.delivery_earning_form', compact('delivery_boy_info'));
+    }
+   
 
 
 }
